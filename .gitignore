@@ -1,5 +1,12 @@
 .env
 
+# Backend
+# __pycache__/
+# .venv/
+# uploads/
+# *.db
+
+
 # Frontend
 
 logs
