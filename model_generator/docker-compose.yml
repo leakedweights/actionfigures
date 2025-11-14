@@ -1,0 +1,58 @@
+services:
+  comfyui-server:
+    build: .
+    container_name: comfyui-server
+    ports:
+      - "8188:8188"
+    volumes:
+      - ./models:/models
+      - ./custom_nodes:/custom_nodes
+      - ./output:/output
+      - ./script_examples:/script_examples
+    environment:
+      - PYTHONUNBUFFERED=1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8188/system_stats"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  comfyui-client:
+    build: .
+    # This command now runs the FastAPI app with Uvicorn
+    command:
+      [
+        "uvicorn",
+        "script_examples.api_server:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+      ]
+    ports:
+      # Expose the FastAPI API to the host machine
+      - "8000:8000"
+    volumes:
+      - ./models:/models
+      - ./custom_nodes:/custom_nodes
+      - ./output:/output
+      - ./script_examples:/script_examples
+    environment:
+      # This is crucial for the client to find the server
+      - COMFYUI_SERVER_ADDRESS=comfyui-server:8188
+      - LOCAL_OUTPUT_DIR=/output
+      # Add your secret tokens here. Separate with commas.
+      - VALID_TOKENS=my-secret-token-123,another-valid-token
+    depends_on:
+      comfyui-server:
+        condition: service_healthy
+    profiles:
+      - client
