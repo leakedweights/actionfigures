@@ -5,7 +5,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 RUN apt-get update && \
-    apt-get install -y python3 python3-pip python3-venv vim curl && \
+    apt-get install -y python3 python3-pip python3-venv vim curl wget && \
     rm -rf /var/lib/apt/lists/*
 
 ARG PYTHON_ENV=my_env
@@ -22,7 +22,10 @@ RUN pip install --no-cache-dir comfy-cli
 
 COPY . .
 
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 EXPOSE 8188
 
-# CORRECTED CMD: This runs the server, not the client script
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["python3", "main.py", "--listen", "0.0.0.0", "--port", "8188", "--output-directory", "/output"]

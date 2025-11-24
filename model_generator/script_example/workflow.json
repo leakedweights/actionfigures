@@ -1,7 +1,7 @@
 {
   "1": {
     "inputs": {
-      "ckpt_name": "hunyuan_3d_v2.1.safetensors"
+      "ckpt_name": "hunyuan3d-dit-v2-1.safetensors"
     },
     "class_type": "ImageOnlyCheckpointLoader",
     "_meta": {
@@ -20,10 +20,7 @@
   "3": {
     "inputs": {
       "shift": 1,
-      "model": [
-        "1",
-        0
-      ]
+      "model": ["1", 0]
     },
     "class_type": "ModelSamplingAuraFlow",
     "_meta": {
@@ -42,10 +39,7 @@
   },
   "6": {
     "inputs": {
-      "clip_vision_output": [
-        "13",
-        0
-      ]
+      "clip_vision_output": ["13", 0]
     },
     "class_type": "Hunyuan3Dv2Conditioning",
     "_meta": {
@@ -60,22 +54,10 @@
       "sampler_name": "euler",
       "scheduler": "normal",
       "denoise": 1,
-      "model": [
-        "3",
-        0
-      ],
-      "positive": [
-        "6",
-        0
-      ],
-      "negative": [
-        "6",
-        1
-      ],
-      "latent_image": [
-        "4",
-        0
-      ]
+      "model": ["3", 0],
+      "positive": ["6", 0],
+      "negative": ["6", 1],
+      "latent_image": ["4", 0]
     },
     "class_type": "KSampler",
     "_meta": {
@@ -86,14 +68,8 @@
     "inputs": {
       "num_chunks": 8000,
       "octree_resolution": 257,
-      "samples": [
-        "7",
-        0
-      ],
-      "vae": [
-        "1",
-        2
-      ]
+      "samples": ["7", 0],
+      "vae": ["1", 2]
     },
     "class_type": "VAEDecodeHunyuan3D",
     "_meta": {
@@ -104,10 +80,7 @@
     "inputs": {
       "algorithm": "surface net",
       "threshold": 0.6,
-      "voxel": [
-        "8",
-        0
-      ]
+      "voxel": ["8", 0]
     },
     "class_type": "VoxelToMesh",
     "_meta": {
@@ -118,10 +91,7 @@
     "inputs": {
       "filename_prefix": "mesh/ComfyUI",
       "image": "",
-      "mesh": [
-        "9",
-        0
-      ]
+      "mesh": ["9", 0]
     },
     "class_type": "SaveGLB",
     "_meta": {
@@ -131,14 +101,8 @@
   "13": {
     "inputs": {
       "crop": "none",
-      "clip_vision": [
-        "1",
-        1
-      ],
-      "image": [
-        "2",
-        0
-      ]
+      "clip_vision": ["1", 1],
+      "image": ["2", 0]
     },
     "class_type": "CLIPVisionEncode",
     "_meta": {
