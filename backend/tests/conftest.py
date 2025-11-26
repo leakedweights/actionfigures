@@ -7,13 +7,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-# Add src to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.modeling import Base
 from src.server import app, get_db
 
-# Use in-memory SQLite for testing
 SQLALCHEMY_DATABASE_URL = "sqlite://"
 
 engine = create_engine(
@@ -26,14 +24,12 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 
 @pytest.fixture(scope="function")
 def test_db():
-    # Create tables
     Base.metadata.create_all(bind=engine)
     db = TestingSessionLocal()
     try:
         yield db
     finally:
         db.close()
-        # Drop tables after test
         Base.metadata.drop_all(bind=engine)
 
 
@@ -53,7 +49,6 @@ def client(test_db):
 
 @pytest.fixture
 def auth_headers(client):
-    # Register and login a test user to get token
     client.post(
         "/api/auth/register",
         json={

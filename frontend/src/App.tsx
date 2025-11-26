@@ -8,7 +8,6 @@ import type { User } from './types';
 import { API_URL } from './utils/constants';
 import { ThreeDViewer } from './viewer/ThreeDViewer';
 
-// Main Control Page Component
 const MainPage = ({ token, onSignOut }: { token: string; user: User; onSignOut: () => void }) => {
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
   const [referenceFile, setReferenceFile] = useState<File | null>(null);
@@ -29,17 +28,14 @@ const MainPage = ({ token, onSignOut }: { token: string; user: User; onSignOut: 
   const [_error, setError] = useState<string | null>(null);
   const [isPublic, setIsPublic] = useState(false);
 
-  // Modal State
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'save' | 'download' | 'rename'>('save');
   const [modalFilename, setModalFilename] = useState('');
   const [targetModelId, setTargetModelId] = useState<number | null>(null);
 
-  // Error Modal State
   const [errorModalOpen, setErrorModalOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // Confirmation Modal State
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'delete' | 'toggle_public' | null>(null);
   const [confirmModel, setConfirmModel] = useState<any>(null);
@@ -84,7 +80,6 @@ const MainPage = ({ token, onSignOut }: { token: string; user: User; onSignOut: 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Validate file type
       const validTypes = ['image/png', 'image/jpeg', 'image/webp'];
       if (!validTypes.includes(file.type)) {
         setErrorMessage('Unsupported file format. Please upload PNG, JPG, or WEBP.');
@@ -119,7 +114,6 @@ const MainPage = ({ token, onSignOut }: { token: string; user: User; onSignOut: 
       };
       reader.readAsDataURL(file);
     }
-    // Clear input so same file can be selected again
     e.target.value = '';
   };
 
@@ -133,7 +127,6 @@ const MainPage = ({ token, onSignOut }: { token: string; user: User; onSignOut: 
         if (model.generated_3d_path) {
           setGenerated3DModel(model.generated_3d_path);
           setIsGenerating(false);
-          // Auto-save update to get the generated path in the list
           loadModels();
           return true;
         }
@@ -199,9 +192,6 @@ const MainPage = ({ token, onSignOut }: { token: string; user: User; onSignOut: 
     setError(null);
 
     try {
-      // If we have a generated 2D image, use that. Otherwise use the uploaded file.
-      // If using generated 2D image, we need to fetch it as a blob to upload it to the 3D endpoint
-
       let fileToUpload = referenceFile;
 
       if (generatedImage && !referenceFile) {
@@ -209,7 +199,7 @@ const MainPage = ({ token, onSignOut }: { token: string; user: User; onSignOut: 
         const blob = await response.blob();
         fileToUpload = new File([blob], "generated_2d.png", { type: "image/png" });
       } else if (generatedImage && referenceFile) {
-        // If both exist, prefer the generated 2D image as it's the "approved" one in the flow
+
         const response = await fetch(generatedImage);
         const blob = await response.blob();
         fileToUpload = new File([blob], "generated_2d.png", { type: "image/png" });
@@ -241,15 +231,12 @@ const MainPage = ({ token, onSignOut }: { token: string; user: User; onSignOut: 
       setCurrentModelId(newModel.id);
       setIsPublic(false);
 
-      // Auto-update instructions if present
       if (instructions) {
         await api.updateModel(token, newModel.id, { instructions });
       }
 
-      // Refresh library
       loadModels();
 
-      // Start polling
       pollStatus(newModel.id);
     } catch (error) {
       console.error('Error starting generation:', error);
@@ -262,25 +249,20 @@ const MainPage = ({ token, onSignOut }: { token: string; user: User; onSignOut: 
 
 
   const handleLoadModel = (model: any) => {
-    // Handle Reference Image Path
     let refPath = model.reference_image_path;
     if (refPath && !refPath.startsWith('http') && !refPath.startsWith('data:')) {
       refPath = `${API_URL}/${refPath}`;
     }
     setReferenceImage(refPath);
-    setReferenceFile(null); // Clear file so user must re-upload to regenerate
+    setReferenceFile(null);
 
-    // Don't populate instructions with the name/title to keep it clean
     setInstructions('');
 
-    // Calculate details for file display
     if (refPath) {
       const i = new Image();
       i.onload = () => {
-        // Approx size from base64
         let sizeStr = "Unknown";
         if (typeof refPath === 'string' && refPath.startsWith('data:')) {
-          // Base64 length * 0.75 is approx byte size
           const sizeInBytes = Math.round((refPath.length * 3) / 4);
           if (sizeInBytes < 1024 * 1024) {
             sizeStr = `${(sizeInBytes / 1024).toFixed(2)} KB`;
@@ -288,7 +270,6 @@ const MainPage = ({ token, onSignOut }: { token: string; user: User; onSignOut: 
             sizeStr = `${(sizeInBytes / (1024 * 1024)).toFixed(2)} MB`;
           }
         } else {
-          // For URLs, we can't easily get size without a HEAD request, so just show resolution
           sizeStr = "Remote File";
         }
 
@@ -303,7 +284,6 @@ const MainPage = ({ token, onSignOut }: { token: string; user: User; onSignOut: 
       setFileDetails(null);
     }
 
-    // Handle Generated 2D Path
     let gen2dPath = model.generated_2d_path;
     if (gen2dPath && !gen2dPath.startsWith('http') && !gen2dPath.startsWith('data:')) {
       gen2dPath = `${API_URL}/${gen2dPath}`;
@@ -412,19 +392,16 @@ const MainPage = ({ token, onSignOut }: { token: string; user: User; onSignOut: 
           handleNewModel();
         }
       } else if (confirmAction === 'toggle_public') {
-        // Determine current status based on where it came from (state or model obj)
         const currentStatus = confirmModel.is_public !== undefined ? confirmModel.is_public : isPublic;
         const newStatus = !currentStatus;
 
         await api.updateModel(token, confirmModel.id, { is_public: newStatus });
 
-        // Update local lists
         await loadModels();
         if (activeTab === 'public') {
           await loadPublicModels(searchQuery);
         }
 
-        // If this is the currently loaded model, update the state
         if (currentModelId === confirmModel.id) {
           setIsPublic(newStatus);
         }
@@ -458,7 +435,6 @@ const MainPage = ({ token, onSignOut }: { token: string; user: User; onSignOut: 
         const link = document.createElement('a');
         link.href = blobUrl;
 
-        // Ensure extension
         const name = filename.endsWith('.glb') ? filename : `${filename}.glb`;
         link.download = name;
 

@@ -32,7 +32,6 @@ textarea::placeholder {
 input[type="password"] {
   font-family: sans-serif !important;
   -webkit-text-security: square !important;
-  text-security: square !important;
 }
 
 /* Button Cursor */

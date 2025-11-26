@@ -45,6 +45,8 @@ UPLOAD_DIR = Path("uploads/models")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 UPLOAD_2D_DIR = Path("uploads/2d")
 UPLOAD_2D_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUT_DIR = Path("output")
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Database setup
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
@@ -139,7 +141,7 @@ def decode_token(token: str) -> dict:
         )
     except (
         jwt.InvalidTokenError
-    ):  # Changed from jwt.JWTError to jwt.InvalidTokenError for more specific handling
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
@@ -194,26 +196,22 @@ def root():
     status_code=status.HTTP_201_CREATED,
 )
 def register(user_data: UserRegister, db: Session = Depends(get_db)):
-    # Check if username exists
     if db.query(User).filter(User.username == user_data.username).first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username already registered",
         )
 
-    # Check if email exists
     if get_user_by_email(db, user_data.email):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
         )
 
-    # Create new user
     return create_user(db, user_data.username, user_data.email, user_data.password)
 
 
 @app.post("/api/auth/login", response_model=Token)
 def login(user_data: UserLogin, db: Session = Depends(get_db)):
-    # Find user by email
     user = get_user_by_email(db, user_data.email)
 
     if not user or not verify_password(user_data.password, user.hashed_password):
@@ -222,7 +220,6 @@ def login(user_data: UserLogin, db: Session = Depends(get_db)):
             detail="Incorrect email or password",
         )
 
-    # Create access token
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": str(user.id)}, expires_delta=access_token_expires
@@ -260,14 +257,11 @@ def get_models_endpoint(
 ):
     models = get_models(db, current_user.id, skip, limit)
 
-    # Normalize legacy URLs
     for model in models:
         if model.generated_3d_path:
-            # Fix old localhost:8001 URLs
             if "localhost:8001" in model.generated_3d_path:
                 model.generated_3d_path = model.generated_3d_path.split("/static/")[-1]
                 model.generated_3d_path = f"/output/{model.generated_3d_path}"
-            # Fix /static/ URLs
             elif model.generated_3d_path.startswith("/static/"):
                 model.generated_3d_path = model.generated_3d_path.replace(
                     "/static/", "/output/", 1
@@ -355,11 +349,10 @@ async def generate_model_endpoint(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    # Save uploaded file
     filename = file.filename or "upload.png"
     file_ext = os.path.splitext(filename)[1]
     if not file_ext:
-        file_ext = ".png"  # Default to png if no extension
+        file_ext = ".png"
 
     file_name = f"{uuid.uuid4()}{file_ext}"
     file_path = UPLOAD_DIR / file_name
@@ -367,11 +360,9 @@ async def generate_model_endpoint(
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # Generate 3D model
     try:
         model_url = await generate_3d(str(file_path))
     except Exception as e:
-        # Cleanup uploaded file on failure
         if os.path.exists(file_path):
             os.remove(file_path)
         raise HTTPException(status_code=500, detail=str(e))
@@ -399,16 +390,12 @@ async def generate_2d_endpoint(
         base_image_b64 = base64.b64encode(file_content).decode("utf-8")
 
     try:
-        # Generate 2D image
         file_path = await generate_2d(
             prompt=instructions,
             base_image_b64=base_image_b64,
             output_dir=str(UPLOAD_2D_DIR),
         )
 
-        # Return URL relative to server
-        # Assuming we mount uploads dir or similar.
-        # Let's mount uploads dir to serve static files.
         relative_path = os.path.relpath(file_path, ".")
         return {"image_url": f"/{relative_path}"}
 

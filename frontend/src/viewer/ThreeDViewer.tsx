@@ -18,6 +18,7 @@ export const ThreeDViewer: React.FC<ThreeDViewerProps> = ({ modelData, rotation 
     const controlsRef = useRef<OrbitControls | null>(null);
     const modelRef = useRef<THREE.Group | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [loadingProgress, setLoadingProgress] = useState<number | null>(null);
 
     useEffect(() => {
         if (!mountRef.current) return;
@@ -65,9 +66,6 @@ export const ThreeDViewer: React.FC<ThreeDViewerProps> = ({ modelData, rotation 
         const roomEnvironment = new RoomEnvironment();
         scene.environment = pmremGenerator.fromScene(roomEnvironment, 0.04).texture;
         roomEnvironment.dispose();
-
-        // Enhanced Lighting for Neural Network Generated Models
-        // Use a three-point lighting setup to reveal surface details
 
         // Ambient light - provides base illumination
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -155,7 +153,11 @@ export const ThreeDViewer: React.FC<ThreeDViewerProps> = ({ modelData, rotation 
     // Load Model
     useEffect(() => {
         setError(null);
-        if (!sceneRef.current || !modelData) return;
+        setLoadingProgress(0);
+        if (!sceneRef.current || !modelData) {
+            setLoadingProgress(null);
+            return;
+        }
 
         let isMounted = true;
 
@@ -179,16 +181,13 @@ export const ThreeDViewer: React.FC<ThreeDViewerProps> = ({ modelData, rotation 
 
                 const model = gltf.scene;
 
-                // Enhanced Material for Neural Network Generated Models (no texture)
-                // Use flatShading to emphasize geometry facets and create better visual definition
                 const pinkMaterial = new THREE.MeshStandardMaterial({
-                    color: 0xFF4D94,    // Vibrant Pink
-                    roughness: 0.6,     // Higher roughness for better light scattering
-                    metalness: 0.0,     // Non-metallic for clearer surface details
-                    flatShading: true,  // Emphasizes facets and surface normals
+                    color: 0xFF4D94,
+                    roughness: 0.6,
+                    metalness: 0.0,
+                    flatShading: true,
                 });
 
-                // Apply material to all meshes
                 model.traverse((child) => {
                     if ((child as THREE.Mesh).isMesh) {
                         const mesh = child as THREE.Mesh;
@@ -196,7 +195,6 @@ export const ThreeDViewer: React.FC<ThreeDViewerProps> = ({ modelData, rotation 
                         mesh.castShadow = true;
                         mesh.receiveShadow = true;
 
-                        // Ensure geometry has proper normals computed
                         if (mesh.geometry) {
                             mesh.geometry.computeVertexNormals();
                         }
@@ -216,13 +214,20 @@ export const ThreeDViewer: React.FC<ThreeDViewerProps> = ({ modelData, rotation 
 
                 sceneRef.current?.add(model);
                 modelRef.current = model;
+                setLoadingProgress(null);
             },
             (xhr) => {
-                console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+                if (isMounted) {
+                    const percent = (xhr.loaded / xhr.total) * 100;
+                    setLoadingProgress(percent);
+                }
             },
             (error) => {
                 console.error('An error happened loading the model:', error);
-                setError('Failed to load model');
+                if (isMounted) {
+                    setError('Failed to load model');
+                    setLoadingProgress(null);
+                }
             }
         );
 
@@ -231,14 +236,12 @@ export const ThreeDViewer: React.FC<ThreeDViewerProps> = ({ modelData, rotation 
         };
     }, [modelData]);
 
-    // Handle Rotation
     useEffect(() => {
         if (modelRef.current && !error) {
             modelRef.current.rotation.y = THREE.MathUtils.degToRad(rotation);
         }
     }, [rotation, error]);
 
-    // Disable controls on error
     useEffect(() => {
         if (controlsRef.current) {
             controlsRef.current.enabled = !error;
@@ -251,6 +254,15 @@ export const ThreeDViewer: React.FC<ThreeDViewerProps> = ({ modelData, rotation 
                 <div className="absolute inset-0 flex items-center justify-center z-10 bg-[#FFF5F9]/50">
                     <div className="bg-[#FFF5F9] border-2 border-[#FF0066] px-6 py-4 shadow-[4px_4px_0px_0px_#FF0066]">
                         <span className="text-[#FF0066] font-medium">Failed to load model</span>
+                    </div>
+                </div>
+            )}
+            {loadingProgress !== null && loadingProgress < 100 && (
+                <div className="absolute inset-0 flex items-center justify-center z-10 bg-[#FFF5F9]/50 backdrop-blur-sm">
+                    <div className="bg-[#FFF5F9] border-2 border-[#FF0066] px-6 py-4 shadow-[4px_4px_0px_0px_#FF0066]">
+                        <span className="text-[#FF0066] font-medium font-['DM_Mono',monospace]">
+                            LOADING: {loadingProgress.toFixed(1)}%
+                        </span>
                     </div>
                 </div>
             )}

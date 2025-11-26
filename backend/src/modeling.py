@@ -61,7 +61,6 @@ class Model3D(Base):
     owner = relationship("User", back_populates="models")
 
 
-# CRUD Operations
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
@@ -173,7 +172,7 @@ async def generate_2d(
     )
 
     model = (
-        "models/gemini-2.5-flash-image"  # Keeping as is per user request/existing code
+        "models/gemini-2.5-flash-image"
     )
 
     final_prompt = f"{SYSTEM_PROMPT}\n\nUser Request: {prompt}"
@@ -201,20 +200,9 @@ async def generate_2d(
         ],
     )
 
-    # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
 
     generated_files = []
-
-    # Using synchronous generate_content for now as the async client usage might differ slightly
-    # and we are wrapping it in an async function.
-    # Ideally we should use client.aio.models.generate_content if available,
-    # but to minimize risk with the existing google-genai library version,
-    # we'll run the blocking call in a thread if needed, or just assume it's fast enough.
-    # Actually, the original code used a stream. Let's switch to non-stream for simplicity if possible,
-    # or keep stream but collect results.
-
-    # Let's stick to the pattern but make it return the file path.
 
     response = client.models.generate_content(
         model=model,
@@ -259,7 +247,6 @@ async def generate_3d(image_path: str):
     if not os.path.exists(image_path):
         raise FileNotFoundError(f"Image file not found: {image_path}")
 
-    # Read and encode image
     with open(image_path, "rb") as f:
         image_bytes = f.read()
         image_b64 = base64.b64encode(image_bytes).decode("utf-8")
@@ -267,7 +254,6 @@ async def generate_3d(image_path: str):
     request_id = str(uuid.uuid4())
 
     async with httpx.AsyncClient() as client:
-        # 1. Submit generation request
         headers = {"Authorization": f"Bearer {MODEL_GENERATOR_TOKEN}"}
         payload = {"id": request_id, "image": image_b64}
 
@@ -285,8 +271,7 @@ async def generate_3d(image_path: str):
 
         print(f"Request submitted. ID: {request_id}")
 
-        # 2. Poll for status
-        max_retries = 60  # 60 * 2s = 2 minutes timeout
+        max_retries = 60
         for _ in range(max_retries):
             await asyncio.sleep(2)
 
@@ -304,8 +289,6 @@ async def generate_3d(image_path: str):
 
                 if status == "completed":
                     model_url = status_data.get("model_url")
-                    # The model_url from generator is like "/static/mesh/filename.glb"
-                    # We serve it from /output in the backend, so replace /static/ with /output/
                     if model_url and model_url.startswith("/static/"):
                         model_url = model_url.replace("/static/", "/output/", 1)
                     return model_url
