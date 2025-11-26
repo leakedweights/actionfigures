@@ -218,8 +218,13 @@ export const ThreeDViewer: React.FC<ThreeDViewerProps> = ({ modelData, rotation 
             },
             (xhr) => {
                 if (isMounted) {
-                    const percent = (xhr.loaded / xhr.total) * 100;
-                    setLoadingProgress(percent);
+                    if (xhr.lengthComputable && xhr.total > 0) {
+                        const percent = (xhr.loaded / xhr.total) * 100;
+                        setLoadingProgress(percent);
+                    } else {
+                        // Indeterminate state
+                        setLoadingProgress(-1);
+                    }
                 }
             },
             (error) => {
@@ -236,12 +241,14 @@ export const ThreeDViewer: React.FC<ThreeDViewerProps> = ({ modelData, rotation 
         };
     }, [modelData]);
 
+    // Handle Rotation
     useEffect(() => {
         if (modelRef.current && !error) {
             modelRef.current.rotation.y = THREE.MathUtils.degToRad(rotation);
         }
     }, [rotation, error]);
 
+    // Disable controls on error
     useEffect(() => {
         if (controlsRef.current) {
             controlsRef.current.enabled = !error;
@@ -261,7 +268,9 @@ export const ThreeDViewer: React.FC<ThreeDViewerProps> = ({ modelData, rotation 
                 <div className="absolute inset-0 flex items-center justify-center z-10 bg-[#FFF5F9]/50 backdrop-blur-sm">
                     <div className="bg-[#FFF5F9] border-2 border-[#FF0066] px-6 py-4 shadow-[4px_4px_0px_0px_#FF0066]">
                         <span className="text-[#FF0066] font-medium font-['DM_Mono',monospace]">
-                            LOADING: {loadingProgress.toFixed(1)}%
+                            {loadingProgress >= 0
+                                ? `LOADING: ${loadingProgress.toFixed(1)}%`
+                                : 'LOADING...'}
                         </span>
                     </div>
                 </div>
