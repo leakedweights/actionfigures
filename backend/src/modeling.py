@@ -171,9 +171,7 @@ async def generate_2d(
         api_key=os.environ.get("GEMINI_API_KEY"),
     )
 
-    model = (
-        "models/gemini-2.5-flash-image"
-    )
+    model = "models/gemini-2.5-flash-image"
 
     final_prompt = f"{SYSTEM_PROMPT}\n\nUser Request: {prompt}"
     parts = [types.Part.from_text(text=final_prompt)]
