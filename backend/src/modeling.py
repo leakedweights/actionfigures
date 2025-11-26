@@ -1,16 +1,152 @@
 import asyncio
+import base64
 import mimetypes
 import os
+import uuid
+from datetime import datetime, timedelta
+from typing import List, Optional
 
+import httpx
+import jwt
 from dotenv import load_dotenv
-
-import fal_client
 from google import genai
 from google.genai import types
-import base64
-from pathlib import Path
+from passlib.context import CryptContext
+from sqlalchemy import ForeignKey, Text
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    Session,
+    mapped_column,
+    relationship,
+)
 
 load_dotenv()
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
+
+
+# Database Models
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    username: Mapped[str] = mapped_column(unique=True, index=True)
+    email: Mapped[str] = mapped_column(unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column()
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+    models = relationship(
+        "Model3D", back_populates="owner", cascade="all, delete-orphan"
+    )
+
+
+class Model3D(Base):
+    __tablename__ = "models"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    reference_image_path: Mapped[Optional[str]] = mapped_column(nullable=True)
+    instructions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    generated_2d_path: Mapped[Optional[str]] = mapped_column(nullable=True)
+    generated_3d_path: Mapped[Optional[str]] = mapped_column(nullable=True)
+    is_public: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+    owner = relationship("User", back_populates="models")
+
+
+# CRUD Operations
+def get_password_hash(password: str) -> str:
+    return pwd_context.hash(password)
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
+
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(
+        to_encode,
+        os.getenv(
+            "SECRET_KEY", "your-secret-key-change-in-production-please-change-this"
+        ),
+        algorithm="HS256",
+    )
+    return encoded_jwt
+
+
+def create_user(db: Session, username: str, email: str, password: str) -> User:
+    hashed_password = get_password_hash(password)
+    db_user = User(username=username, email=email, hashed_password=hashed_password)
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+
+def get_user_by_email(db: Session, email: str) -> Optional[User]:
+    return db.query(User).filter(User.email == email).first()
+
+
+def create_model(db: Session, model_data: dict, user_id: int) -> Model3D:
+    db_model = Model3D(**model_data, user_id=user_id)
+    db.add(db_model)
+    db.commit()
+    db.refresh(db_model)
+    return db_model
+
+
+def get_models(
+    db: Session, user_id: int, skip: int = 0, limit: int = 100
+) -> List[Model3D]:
+    return (
+        db.query(Model3D)
+        .filter(Model3D.user_id == user_id)
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+
+def update_model(
+    db: Session, model_id: int, model_data: dict, user_id: int
+) -> Optional[Model3D]:
+    model = (
+        db.query(Model3D)
+        .filter(Model3D.id == model_id, Model3D.user_id == user_id)
+        .first()
+    )
+    if model:
+        for key, value in model_data.items():
+            setattr(model, key, value)
+        db.commit()
+        db.refresh(model)
+    return model
+
+
+def delete_model(db: Session, model_id: int, user_id: int) -> bool:
+    model = (
+        db.query(Model3D)
+        .filter(Model3D.id == model_id, Model3D.user_id == user_id)
+        .first()
+    )
+    if model:
+        db.delete(model)
+        db.commit()
+        return True
+    return False
 
 
 def save_binary_file(file_name, data):
@@ -20,74 +156,165 @@ def save_binary_file(file_name, data):
     print(f"File saved to to: {file_name}")
 
 
-def generate_2d(prompt, base_image):
+SYSTEM_PROMPT = """
+You are an expert 3D character designer.
+Generate a realistic, stylized action figure on a plain white background.
+Do not include any packaging, boxes, or text. The background must be white/transparent, without any shadows, so that the image can easily be converted to a 3D model.
+Ensure the figure is the main focus, clearly visible, and fully contained within the frame.
+High quality, detailed, 3D render style.
+"""
+
+
+async def generate_2d(
+    prompt: str, base_image_b64: Optional[str] = None, output_dir: str = "uploads/2d"
+):
     client = genai.Client(
         api_key=os.environ.get("GEMINI_API_KEY"),
     )
 
-    model = "gemini-2.5-flash-image"
+    model = (
+        "models/gemini-2.5-flash-image"  # Keeping as is per user request/existing code
+    )
+
+    final_prompt = f"{SYSTEM_PROMPT}\n\nUser Request: {prompt}"
+    parts = [types.Part.from_text(text=final_prompt)]
+
+    if base_image_b64:
+        image_bytes = base64.b64decode(base_image_b64)
+        parts.append(
+            types.Part.from_bytes(
+                data=image_bytes,
+                mime_type="image/png",
+            )
+        )
+
     contents = [
         types.Content(
             role="user",
-            parts=[
-                types.Part.from_text(text=prompt),
-                types.Part.from_inline_data(
-                    data=base_image,
-                    mime_type="image/png",
-                ),
-            ],
+            parts=parts,
         ),
     ]
+
     generate_content_config = types.GenerateContentConfig(
         response_modalities=[
             "IMAGE",
-            "TEXT",
         ],
     )
 
-    file_index = 0
-    for chunk in client.models.generate_content_stream(
+    # Create output directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
+
+    generated_files = []
+
+    # Using synchronous generate_content for now as the async client usage might differ slightly
+    # and we are wrapping it in an async function.
+    # Ideally we should use client.aio.models.generate_content if available,
+    # but to minimize risk with the existing google-genai library version,
+    # we'll run the blocking call in a thread if needed, or just assume it's fast enough.
+    # Actually, the original code used a stream. Let's switch to non-stream for simplicity if possible,
+    # or keep stream but collect results.
+
+    # Let's stick to the pattern but make it return the file path.
+
+    response = client.models.generate_content(
         model=model,
         contents=contents,
         config=generate_content_config,
-    ):
-        if (
-            chunk.candidates is None
-            or chunk.candidates[0].content is None
-            or chunk.candidates[0].content.parts is None
-        ):
-            continue
-        if (
-            chunk.candidates[0].content.parts[0].inline_data
-            and chunk.candidates[0].content.parts[0].inline_data.data
-        ):
-            file_name = f"ENTER_FILE_NAME_{file_index}"
-            file_index += 1
-            inline_data = chunk.candidates[0].content.parts[0].inline_data
-            data_buffer = inline_data.data
-            file_extension = mimetypes.guess_extension(inline_data.mime_type)
-            save_binary_file(f"{file_name}{file_extension}", data_buffer)
-        else:
-            print(chunk.text)
-
-
-async def generate_3d(base_image):
-    handler = await fal_client.submit_async(
-        "fal-ai/hunyuan3d-v21",
-        arguments={
-            "input_image_url": base_image
-        },
     )
 
-    async for event in handler.iter_events(with_logs=True):
-        print(event)
+    if (
+        response.candidates
+        and response.candidates[0].content
+        and response.candidates[0].content.parts
+    ):
+        for part in response.candidates[0].content.parts:
+            if part.inline_data and part.inline_data.data:
+                file_name = f"{uuid.uuid4()}"
+                if part.inline_data.mime_type:
+                    file_extension = (
+                        mimetypes.guess_extension(part.inline_data.mime_type) or ".png"
+                    )
+                else:
+                    file_extension = ".png"
+                full_file_name = f"{file_name}{file_extension}"
+                file_path = os.path.join(output_dir, full_file_name)
 
-    result = await handler.get()
+                save_binary_file(file_path, part.inline_data.data)
+                generated_files.append(file_path)
 
-    return result
+    if not generated_files:
+        raise Exception("No image generated")
+
+    return generated_files[0]
 
 
-# if __name__ == "__main__":
-#     data = Path(path).read_bytes()
-#     b64  = base64.b64encode(data).decode()
-#     generate_3d(f"data:image/png;base64,{b64}")
+MODEL_GENERATOR_URL = os.getenv("MODEL_GENERATOR_URL", "http://127.0.0.1:8001")
+MODEL_GENERATOR_TOKEN = os.getenv("MODEL_GENERATOR_TOKEN", "my-secret-token-123")
+
+
+async def generate_3d(image_path: str):
+    """
+    Generate a 3D model from an image using the local model generator service.
+    """
+    if not os.path.exists(image_path):
+        raise FileNotFoundError(f"Image file not found: {image_path}")
+
+    # Read and encode image
+    with open(image_path, "rb") as f:
+        image_bytes = f.read()
+        image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+
+    request_id = str(uuid.uuid4())
+
+    async with httpx.AsyncClient() as client:
+        # 1. Submit generation request
+        headers = {"Authorization": f"Bearer {MODEL_GENERATOR_TOKEN}"}
+        payload = {"id": request_id, "image": image_b64}
+
+        try:
+            response = await client.post(
+                f"{MODEL_GENERATOR_URL}/generate",
+                json=payload,
+                headers=headers,
+                timeout=30.0,
+            )
+            response.raise_for_status()
+        except httpx.HTTPError as e:
+            print(f"Error submitting request: {e}")
+            raise
+
+        print(f"Request submitted. ID: {request_id}")
+
+        # 2. Poll for status
+        max_retries = 60  # 60 * 2s = 2 minutes timeout
+        for _ in range(max_retries):
+            await asyncio.sleep(2)
+
+            try:
+                status_response = await client.get(
+                    f"{MODEL_GENERATOR_URL}/status/{request_id}",
+                    headers=headers,
+                    timeout=10.0,
+                )
+                status_response.raise_for_status()
+                status_data = status_response.json()
+
+                status = status_data.get("status")
+                print(f"Status: {status}")
+
+                if status == "completed":
+                    model_url = status_data.get("model_url")
+                    # The model_url from generator is like "/static/mesh/filename.glb"
+                    # We serve it from /output in the backend, so replace /static/ with /output/
+                    if model_url and model_url.startswith("/static/"):
+                        model_url = model_url.replace("/static/", "/output/", 1)
+                    return model_url
+
+                if status == "error":
+                    raise Exception(f"Generation failed: {status_data.get('message')}")
+
+            except httpx.HTTPError as e:
+                print(f"Error checking status: {e}")
+                continue
+
+        raise TimeoutError("Generation timed out")

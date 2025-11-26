@@ -1,21 +1,22 @@
-import websocket
-import uuid
-import json
-import random
-import os
-import sys
-import requests
-import urllib.request
-import urllib.parse
-import urllib.error
-import time
-import shutil
 import base64
+import json
 import logging
+import os
+import random
+import shutil
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import uuid
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional, Dict, Any
-from fastapi import FastAPI, HTTPException, BackgroundTasks, status, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from typing import Any, Dict, Optional
+
+import requests
+import websocket
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -36,6 +37,15 @@ request_status: Dict[str, Dict[str, Any]] = {}
 
 # --- FastAPI App Initialization ---
 app = FastAPI(title="3D Model Generation API", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.mount("/static", StaticFiles(directory=LOCAL_OUTPUT_DIR), name="static")
 
 executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)

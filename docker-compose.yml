@@ -1,0 +1,74 @@
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+  backend:
+    build: ./backend
+    ports:
+      - "8003:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./imgto3d.db
+      - SECRET_KEY=dev-secret-key
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - MODEL_GENERATOR_URL=http://comfyui-client:8001
+      - MODEL_GENERATOR_TOKEN=my-secret-token-123
+    volumes:
+      - ./backend/imgto3d.db:/app/imgto3d.db
+      - ./backend/uploads:/app/uploads
+      - ./model_generator/output:/app/output
+    depends_on:
+      - comfyui-client
+
+  comfyui-server:
+    build:
+      context: ./model_generator
+      args:
+        CUDA_VERSION: ${CUDA_VERSION:-12.8}
+    container_name: comfyui-server
+    ports:
+      - "8002:8188"
+    volumes:
+      - ./model_generator/models:/models
+      - ./model_generator/custom_nodes:/custom_nodes
+      - ./model_generator/output:/output
+      - ./model_generator/script_example:/script_examples
+    environment:
+      - PYTHONUNBUFFERED=1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8188/system_stats" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  comfyui-client:
+    build:
+      context: ./model_generator
+      args:
+        CUDA_VERSION: ${CUDA_VERSION:-12.8}
+    command: [ "uvicorn", "script_example.api_server:app", "--host", "0.0.0.0", "--port", "8001" ]
+    ports:
+      - "8080:8001"
+    volumes:
+      - ./model_generator/models:/models
+      - ./model_generator/custom_nodes:/custom_nodes
+      - ./model_generator/output:/output
+      - ./model_generator/script_examples:/script_examples
+    environment:
+      - COMFYUI_SERVER_ADDRESS=comfyui-server:8188
+      - LOCAL_OUTPUT_DIR=/output
+      - VALID_TOKENS=my-secret-token-123
+    depends_on:
+      comfyui-server:
+        condition: service_healthy

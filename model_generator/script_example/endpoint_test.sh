@@ -3,7 +3,7 @@
 # ComfyUI API Test Script (Clean & Robust)
 # ==============================================================================
 
-API_URL="http://localhost:8000"
+API_URL="http://localhost:8001"
 TOKEN="my-secret-token-123"
 IMAGE_FILE="example.png"
 OUTPUT_MODEL="my_generated_model.glb"

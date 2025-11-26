@@ -1,5 +1,8 @@
 # General
 .env
+*.safetensors
+*_cache/
+mesh/
 
 # Backend
 __pycache__/

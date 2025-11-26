@@ -1,6 +1,31 @@
 # ImgTo3D Action Figure Generator
 
-## Local Setup
+## Docker Setup (Recommended)
+
+Run the full stack (Frontend, Backend, Model Generator) with a single command:
+
+```bash
+docker compose up --build
+```
+
+- **Frontend**: http://localhost:3000
+- **Backend**: http://localhost:8000
+- **ComfyUI**: http://localhost:8188
+
+### CUDA Version Configuration
+
+By default, the model generator uses CUDA 12.8. To éarogjt. use CUDA 12.1 instead:
+
+```bash
+CUDA_VERSION=12.1 docker compose up --build
+```
+
+Or add to your `.env` file:
+```
+CUDA_VERSION=12.1
+```
+
+## Local Setup (Legacy)
 
 ### Frontend
 
@@ -23,5 +48,6 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 Start FastAPI server:
 
 ```bash
-uv run -m backend.src.server
+cd backend
+uv run -m src.server
 ```

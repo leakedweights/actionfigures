@@ -1,0 +1,61 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap');
+
+* {
+  text-transform: uppercase;
+}
+
+input::placeholder,
+textarea::placeholder {
+  text-transform: uppercase;
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 16px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #FFD9ED;
+  border-left: 2px solid #FF0066;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #FF0066;
+  border: 3px solid #FFD9ED;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #E6005C;
+}
+
+/* Password Input */
+input[type="password"] {
+  font-family: sans-serif !important;
+  -webkit-text-security: square !important;
+  text-security: square !important;
+}
+
+/* Button Cursor */
+button,
+[role="button"] {
+  cursor: pointer;
+}
+
+/* Range Input Styling */
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 24px;
+  background: #FF0066;
+  border: 2px solid #FFC4E1;
+  cursor: pointer;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 24px;
+  background: #FF0066;
+  border: 2px solid #FFC4E1;
+  cursor: pointer;
+}
